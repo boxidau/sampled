@@ -2,6 +2,7 @@ package sample
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 
 	"github.com/golang/glog"
@@ -51,15 +52,24 @@ func SampleFromRawSample(r *RawSample) (Sample, error) {
 			glog.Warningf("Skipping invalid field '%s' specified for dataset %s", k, sample.Dataset)
 			continue
 		}
-		switch t := v.(type) {
-		case string:
+		switch reflect.TypeOf(v).Kind() {
+		case reflect.String:
 			sample.Data[k] = Field{Name: k, Type: Label, LabelValue: v.(string)}
-		case float64:
+		case reflect.Float64, reflect.Float32:
 			sample.Data[k] = Field{Name: k, Type: Measure, MeasureValue: v.(float64)}
-		case int64:
-			sample.Data[k] = Field{Name: k, Type: Measure, MeasureValue: v.(float64)}
+		case reflect.Int64, reflect.Int32, reflect.Int:
+			sample.Data[k] = Field{Name: k, Type: Measure, MeasureValue: float64(v.(int64))}
+		case reflect.Slice:
+			vs := v.([]interface{})
+			labelSet := make([]string, 0, len(vs))
+			for _, vv := range vs {
+				if reflect.TypeOf(vv).Kind() == reflect.String {
+					labelSet = append(labelSet, vv.(string))
+				}
+			}
+			sample.Data[k] = Field{Name: k, Type: LabelSet, LabelSetValue: labelSet}
 		default:
-			glog.Infof("Unsupported sample value type %s for %s: %s", t, k, v)
+			glog.Warning("Unsupported field type for %s in dataset %s", k, r.Dataset)
 		}
 	}
 	return sample, nil

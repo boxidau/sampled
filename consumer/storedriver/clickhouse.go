@@ -174,7 +174,6 @@ func (chd ClickHouseDriver) InsertSamplesToDataset(ctx context.Context, dataset 
 	for _, s := range samples {
 		// insert timestamp first
 		batch.Column(0).Append([]time.Time{time.Unix(s.Timestamp/1000, 0).UTC()})
-
 		for colIdx, fieldName := range insertFieldOrder {
 			fieldDescription, ok := fieldSet[fieldName]
 			if !ok {
@@ -198,10 +197,9 @@ func (chd ClickHouseDriver) InsertSamplesToDataset(ctx context.Context, dataset 
 				if sampleHasField {
 					batch.Column(colIdx + 1).Append([][]string{fv.LabelSetValue})
 				} else {
-					batch.Column(colIdx + 1).Append([][]string{})
+					batch.Column(colIdx + 1).Append([][]string{{}})
 				}
 			}
-
 		}
 	}
 	err = batch.Send()
