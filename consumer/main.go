@@ -70,6 +70,9 @@ func (c *Consumer) Shutdown() {
 }
 
 func (c *Consumer) Run() {
+	glog.Infof("Subscribing to kafka topics: %v", c.Config.Kafka.Topics)
+	c.KafkaConsumer.SubscribeTopics(c.Config.Kafka.Topics, nil)
+
 	ctx := context.Background()
 	for c.run {
 		ev := c.KafkaConsumer.Poll(10)
@@ -94,7 +97,7 @@ func (c *Consumer) Run() {
 			}
 		}
 
-		if c.flushRequired() || !c.run {
+		if c.flushRequired() {
 			err := c.flush(ctx)
 			if err != nil {
 				glog.Fatalf("Panic: Unable to flush samples to storage: %v", err)
@@ -129,9 +132,6 @@ func NewConsumer(cfg *config.SampledConfig) (*Consumer, error) {
 		glog.Fatalf("Failed to setup kafka consumer: %v", err)
 	}
 	consumer.KafkaConsumer = kafkaConsumer
-
-	glog.Infof("Subscribing to kafka topics: %v", cfg.Kafka.Topics)
-	consumer.KafkaConsumer.SubscribeTopics(cfg.Kafka.Topics, nil)
 
 	return consumer, nil
 }
