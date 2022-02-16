@@ -13,15 +13,7 @@ Realtime event analytics capture and processor
 
 ## Consumer
 ```
-go run ./consumer \
-    -logtostderr \
-    -clickhouse_dsn clickhouse://cliskhouse_username:password@clickhouse.dnsname:9000/sampled \
-    -kafka_sasl_username kafka_username \
-    -kafka_sasl_password kafka_password \
-    -kafka_security_protocol SASL_PLAINTEXT \
-    -kafka_sasl_mechanisms SCRAM-SHA-512 \
-    -kafka_bootstrap_servers kafka-bootstrap.dnsname:32559 \
-    -sample_flush_interval_max 5s
+go run ./consumer -logtostderr -sampled_config config.example.yaml
 ```
 
 ## Creating Samples
