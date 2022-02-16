@@ -1,5 +1,4 @@
-import sampled
-import canonical
+from libsampled import sampled, canonical
 
 import os
 import time

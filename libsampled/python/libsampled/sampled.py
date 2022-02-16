@@ -19,7 +19,7 @@ SAMPLED_DAEMON_PORT = os.getenv("SAMPLED_DAEMON_PORT", 7675)
 FieldType = Union[str, float, int, List[str]]
 
 
-def _now_milliseconds():
+def _now_milliseconds() -> int:
     return int(time.time() * 1000)
 
 
@@ -36,7 +36,7 @@ class SampleBuffer:
         )
         sampled_thread.start()
 
-    def _flush_loop(self):
+    def _flush_loop(self) -> None:
         while True:
             try:
                 item = self.__q.get(timeout=0.05)
@@ -58,7 +58,7 @@ class SampleBuffer:
             if at_flush_size or at_flush_time:
                 self._do_flush()
 
-    def _do_flush(self):
+    def _do_flush(self) -> None:
         print(f"flushing {self.__buffer_message_count} samples")
         buffer, self.__buffer = self.__buffer, b""
         self.__buffer_message_count = 0
@@ -81,7 +81,7 @@ class SampleBuffer:
                 time.sleep(1)
                 attempt += 1
 
-    def add_sample(self, dataset: str, sample: Dict[str, FieldType]):
+    def add_sample(self, dataset: str, sample: Dict[str, FieldType]) -> None:
         try:
             self.__q.put(
                 item={
@@ -100,5 +100,5 @@ class SampleBuffer:
 _sample_buffer = SampleBuffer()
 
 
-def add_sample(dataset: str, sample: Dict[str, FieldType]):
+def add_sample(dataset: str, sample: Dict[str, FieldType]) -> None:
     _sample_buffer.add_sample(dataset, sample)
