@@ -4,3 +4,4 @@ __pycache__
 *.pyi
 .vscode
 dev/
+config.local.yaml

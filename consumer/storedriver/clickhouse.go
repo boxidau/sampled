@@ -3,12 +3,12 @@ package storedriver
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/boxidau/sampled/consumer/config"
 	"github.com/boxidau/sampled/consumer/sample"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -40,27 +40,13 @@ type ClickHouseDriver struct {
 	connection driver.Conn
 }
 
-func NewClickHouseStoreDriver(uri string) (*ClickHouseDriver, error) {
-
-	dsn, err := url.Parse(uri)
-	if err != nil {
-		glog.Fatalf("Invalid clickhouse_dsn %s: %v", uri, err)
-	}
-
-	password, ok := dsn.User.Password()
-	if !ok {
-		password = ""
-	}
-
-	hosts := strings.Split(dsn.Host, ",")
-	database := strings.TrimPrefix(dsn.Path, "/")
-
+func NewClickHouseStoreDriver(cfg *config.ClickHouseConfig) (*ClickHouseDriver, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr: hosts,
+		Addr: cfg.Hosts,
 		Auth: clickhouse.Auth{
-			Database: database,
-			Username: dsn.User.Username(),
-			Password: password,
+			Database: cfg.Database,
+			Username: cfg.Username,
+			Password: cfg.Password,
 		},
 		//Debug:           true,
 		DialTimeout:     time.Second * 3,
@@ -82,10 +68,10 @@ func NewClickHouseStoreDriver(uri string) (*ClickHouseDriver, error) {
 		hs.DisplayName,
 		hs.Name,
 		hs.Version.Major, hs.Version.Minor, hs.Version.Patch,
-		database,
+		cfg.Database,
 	)
 
-	return &ClickHouseDriver{database: database, connection: conn}, nil
+	return &ClickHouseDriver{database: cfg.Database, connection: conn}, nil
 }
 
 func (chd ClickHouseDriver) CreateBaseDataset(ctx context.Context, dataset string) error {
