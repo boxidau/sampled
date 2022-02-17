@@ -53,6 +53,6 @@ func main() {
 	glog.Info("Starting sampled consumer")
 	err = consumer.Run()
 	if err != nil {
-		glog.Fatal("Unable to run sampled consumer %v", err)
+		glog.Fatalf("Unable to run sampled consumer %v", err)
 	}
 }
