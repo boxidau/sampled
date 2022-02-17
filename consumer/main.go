@@ -28,7 +28,7 @@ func main() {
 		http.Handle("/metrics", promhttp.Handler())
 		err := http.ListenAndServe(*FLAG_prometheusListen, nil)
 		if err != nil {
-			glog.Errorf("Unable to start prometheus metrics HTTP server")
+			glog.Errorf("Unable to start prometheus metrics HTTP server %v", err)
 		}
 	}()
 

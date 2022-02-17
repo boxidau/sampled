@@ -1,20 +1,20 @@
 store:
     clickhouse:
         hosts:
-            - localhost:9000
-        username: sampled
+            - ${SAMPLED_CLICKHOUSE_HOST}
+        username: ${SAMPLED_CLICKHOUSE_USERNAME}
         password: ${SAMPLED_CLICKHOUSE_PASSWORD}
-        database: sampled
+        database: ${SAMPLED_CLICKHOUSE_DATABASE}
 kafka:
     groupId: sampled_kafka_group
     resetPosition: latest
     securityProtocol: SASL_PLAINTEXT
     bootstrapServers:
-        - localhost:9092
+        - ${SAMPLED_KAFKA_BOOTSTRAP_SERVER}
     topics:
-        - sampled
+        - ${SAMPLED_KAFKA_TOPIC}
     sasl:
-        username: sampled-consumer
+        username: ${SAMPLED_KAFKA_SASL_USERNAME}
         password: ${SAMPLED_KAFKA_SASL_PASSWORD}
         mechanism: SCRAM-SHA-512
 tuning:
