@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,10 +14,48 @@ import (
 	"github.com/boxidau/sampled/consumer/sample"
 	"github.com/boxidau/sampled/consumer/storedriver"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-var FLAG_sampledConfig = flag.String("sampled_config", "config.yaml", "Sampled config file")
+var (
+	FLAG_sampledConfig    = flag.String("sampled_config", "config.yaml", "Sampled config file")
+	FLAG_prometheusListen = flag.String("prometheus_listen", ":9100", "Listen address for prometheus metrics exposition")
+
+	samplesValidCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "sampled_valid_samples_total",
+		Help: "The total number of processed samples",
+	})
+	samplesInvalidCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "sampled_invalid_samples_total",
+		Help: "The total number of samples which failed to parse",
+	})
+	batchSizeGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "sampled_batch_size",
+		Help: "Size of batch during flush to storage",
+	})
+	flushSuccess = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "sampled_flush_success_total",
+		Help: "The total nmber of successful sample flush events",
+	})
+	kafkaRetriableErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "sampled_kafka_retriable_errors_total",
+		Help: "The total number of kafka errors encountered",
+	})
+	flushTimerHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "sampled_storage_flush_duration_seconds",
+		Help:    "Time taken to flush samples to storage",
+		Buckets: prometheus.ExponentialBucketsRange(0.1, 10, 20),
+	})
+	kafkaComitTimerHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "sampled_kafka_commit_duration_seconds",
+		Help:    "Time taken to commit offsets to kafka",
+		Buckets: prometheus.ExponentialBucketsRange(0.1, 10, 20),
+	})
+)
 
 func init() {
 	flag.Parse()
@@ -44,16 +83,30 @@ func (c *Consumer) flushRequired() bool {
 
 func (c *Consumer) flush(ctx context.Context) error {
 	curBatchSize := len(c.sampleBuffer)
+	batchSizeGauge.Set(float64(curBatchSize))
 	if curBatchSize == 0 {
 		return nil
 	}
 
 	glog.Infof("Flushing batch of %d samples to storage", curBatchSize)
+	fTimer := prometheus.NewTimer(flushTimerHistogram)
 	err := c.StoreDriver.InsertSamples(ctx, c.sampleBuffer)
 	if err != nil {
 		return err
 	}
+	fTimer.ObserveDuration()
 	c.sampleBuffer = make([]sample.Sample, 0, c.Config.Tuning.SampleBufferSize)
+
+	kTimer := prometheus.NewTimer(kafkaComitTimerHistogram)
+	tps, err := c.KafkaConsumer.Commit()
+	kTimer.ObserveDuration()
+	if err != nil {
+		return errors.Wrap(err, "Unable to commit kafka offsets: %v")
+	}
+	for _, tp := range tps {
+		glog.Infof("Kafka commit topic: %v partition: %v offset: %v", *tp.Topic, tp.Partition, tp.Offset)
+	}
+
 	c.lastFlush = time.Now()
 	return nil
 }
@@ -81,18 +134,23 @@ func (c *Consumer) Run() {
 			var s sample.RawSample
 			err := json.Unmarshal(e.Value, &s)
 			if err != nil {
+				samplesInvalidCounter.Inc()
 				glog.Errorf("Unable to unmarshal sample json")
 			} else {
 				smp, err := sample.SampleFromRawSample(&s)
 				if err != nil {
+					samplesInvalidCounter.Inc()
 					glog.Errorf("Skipping invalid sample: %v", err)
+				} else {
+					samplesValidCounter.Inc()
+					c.sampleBuffer = append(c.sampleBuffer, smp)
 				}
-				c.sampleBuffer = append(c.sampleBuffer, smp)
 			}
 		case kafka.Error:
 			if !e.IsRetriable() {
 				glog.Fatalf("Fatal kafka error: %v", e)
 			} else {
+				kafkaRetriableErrors.Inc()
 				glog.Errorf("Retryable kafka error: %v", e)
 			}
 		}
@@ -102,14 +160,7 @@ func (c *Consumer) Run() {
 			if err != nil {
 				glog.Fatalf("Panic: Unable to flush samples to storage: %v", err)
 			}
-
-			tps, err := c.KafkaConsumer.Commit()
-			if err != nil {
-				glog.Fatalf("Panic: Unable to commit kafka offsets: %v", err)
-			}
-			for _, tp := range tps {
-				glog.Infof("Kafka commit topic: %v partition: %v offset: %v", *tp.Topic, tp.Partition, tp.Offset)
-			}
+			flushSuccess.Inc()
 		}
 	}
 }
@@ -137,6 +188,15 @@ func NewConsumer(cfg *config.SampledConfig) (*Consumer, error) {
 }
 
 func main() {
+	go func() {
+		glog.Infof("Prometheus HTTP exposition starting on %s", *FLAG_prometheusListen)
+		http.Handle("/metrics", promhttp.Handler())
+		err := http.ListenAndServe(*FLAG_prometheusListen, nil)
+		if err != nil {
+			glog.Errorf("Unable to start prometheus metrics HTTP server")
+		}
+	}()
+
 	cfg, err := config.LoadConfig(*FLAG_sampledConfig)
 	if err != nil {
 		glog.Fatal(err)
