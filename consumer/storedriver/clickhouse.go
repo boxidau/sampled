@@ -35,9 +35,12 @@ type ClickHouseColumn struct {
 	Type ClickHouseColumnType
 }
 
+type knownSchema map[string]map[string]bool
+
 type ClickHouseDriver struct {
-	database   string
-	connection driver.Conn
+	database    string
+	connection  driver.Conn
+	schemaStore knownSchema
 }
 
 func NewClickHouseStoreDriver(cfg *config.ClickHouseConfig) (*ClickHouseDriver, error) {
@@ -71,10 +74,18 @@ func NewClickHouseStoreDriver(cfg *config.ClickHouseConfig) (*ClickHouseDriver, 
 		cfg.Database,
 	)
 
-	return &ClickHouseDriver{database: cfg.Database, connection: conn}, nil
+	return &ClickHouseDriver{
+		database:    cfg.Database,
+		connection:  conn,
+		schemaStore: knownSchema{},
+	}, nil
 }
 
-func (chd ClickHouseDriver) CreateBaseDataset(ctx context.Context, dataset string) error {
+func (chd ClickHouseDriver) createBaseDataset(ctx context.Context, dataset string) error {
+	if _, ok := chd.schemaStore[dataset]; ok {
+		glog.V(2).Infof("%s is a known dataset, skipping table creation", dataset)
+		return nil
+	}
 	glog.V(2).Infof("Refreshing schema for %s", dataset)
 	err := chd.connection.Exec(
 		ctx,
@@ -91,6 +102,28 @@ func (chd ClickHouseDriver) CreateBaseDataset(ctx context.Context, dataset strin
 		glog.Error(err)
 		return err
 	}
+	chd.schemaStore[dataset] = map[string]bool{TS_COLUMN: true}
+	return nil
+}
+
+func (chd ClickHouseDriver) createColumn(ctx context.Context, dataset, name string, columnType ClickHouseColumnType) error {
+	knownColumns, ok := chd.schemaStore[dataset]
+	if !ok {
+		return fmt.Errorf("attempting to create column %s before dataset %s is known to be created", name, dataset)
+	} else {
+		if _, ok := knownColumns[name]; ok {
+			glog.V(3).Infof("%s is a known column for %s, skipping creation attempt", name, dataset)
+			return nil
+		}
+	}
+
+	query := fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN IF NOT EXISTS %s %s", chd.database, dataset, name, columnType)
+	glog.V(3).Infof("Create column SQL: %s", query)
+	err := chd.connection.Exec(ctx, query)
+	if err != nil {
+		return err
+	}
+	knownColumns[name] = true
 	return nil
 }
 
@@ -106,7 +139,7 @@ func (chd ClickHouseDriver) InsertSamples(ctx context.Context, samples []sample.
 		}
 	}
 	for d, s := range samplesByDataset {
-		err := chd.InsertSamplesToDataset(ctx, d, s)
+		err := chd.insertSamplesToDataset(ctx, d, s)
 		if err != nil {
 			return err
 		}
@@ -115,11 +148,11 @@ func (chd ClickHouseDriver) InsertSamples(ctx context.Context, samples []sample.
 	return nil
 }
 
-func (chd ClickHouseDriver) InsertSamplesToDataset(ctx context.Context, dataset string, samples []sample.Sample) error {
+func (chd ClickHouseDriver) insertSamplesToDataset(ctx context.Context, dataset string, samples []sample.Sample) error {
 	fieldSet := map[string]ClickHouseColumn{}
 	insertFieldOrder := []string{}
 
-	err := chd.CreateBaseDataset(ctx, dataset)
+	err := chd.createBaseDataset(ctx, dataset)
 	if err != nil {
 		return err
 	}
@@ -134,7 +167,7 @@ func (chd ClickHouseDriver) InsertSamplesToDataset(ctx context.Context, dataset 
 				if !ok {
 					return fmt.Errorf("unknown FieldType for clickhouse storage driver")
 				}
-				err := chd.CreateColumn(ctx, dataset, f.Name, colType)
+				err := chd.createColumn(ctx, dataset, f.Name, colType)
 				if err != nil {
 					return err
 				}
@@ -193,16 +226,6 @@ func (chd ClickHouseDriver) InsertSamplesToDataset(ctx context.Context, dataset 
 		return err
 	}
 
-	return nil
-}
-
-func (chd ClickHouseDriver) CreateColumn(ctx context.Context, dataset, name string, columnType ClickHouseColumnType) error {
-	query := fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN IF NOT EXISTS %s %s", chd.database, dataset, name, columnType)
-	glog.V(3).Infof("Create column SQL: %s", query)
-	err := chd.connection.Exec(ctx, query)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
