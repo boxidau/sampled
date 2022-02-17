@@ -7,9 +7,27 @@ Realtime event analytics capture and processor
 - Configure fluentbit to capture samples on hosts
 - Output from fluentbit to kafka
 - Consume samples from Kafka in SampleD consumer
-- SampleD will manage schema and store samples in ClickHouse/Apache Druid
-- Query with Apache Superset
+- SampleD will manage schema and store samples in ClickHouse
+- Query/visualize with Apache Superset
 
+## Infrastructure
+```mermaid
+    graph LR
+        subgraph Host
+            subgraph Application
+                A(Libsampled)
+            end
+            B(Apache fluent-bit)
+        end
+        subgraph Infra
+            C(Apache kafka) -->
+            D(sampled-consumer) -->
+            E[(clickhouse)] -->
+            F(Apache Superset)
+        end
+        A --> B
+        B --> C
+```
 
 ## Consumer
 ```
