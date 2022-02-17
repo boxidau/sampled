@@ -102,9 +102,12 @@ func (c *Consumer) Shutdown() {
 	c.run = false
 }
 
-func (c *Consumer) Run() {
+func (c *Consumer) Run() error {
 	glog.Infof("Subscribing to kafka topics: %v", c.Config.Kafka.Topics)
-	c.KafkaConsumer.SubscribeTopics(c.Config.Kafka.Topics, nil)
+	err := c.KafkaConsumer.SubscribeTopics(c.Config.Kafka.Topics, nil)
+	if err != nil {
+		return err
+	}
 
 	ctx := context.Background()
 	for c.run {
@@ -145,9 +148,16 @@ func (c *Consumer) Run() {
 	}
 
 	glog.Infof("Closing kafka consumer...")
-	c.KafkaConsumer.Close()
+	err = c.KafkaConsumer.Close()
+	if err != nil {
+		return err
+	}
 	glog.Infof("Closing store driver...")
-	c.StoreDriver.Close()
+	err = c.StoreDriver.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewConsumer(cfg *config.SampledConfig) (*Consumer, error) {

@@ -192,31 +192,44 @@ func (chd ClickHouseDriver) insertSamplesToDataset(ctx context.Context, dataset 
 
 	for _, s := range samples {
 		// insert timestamp first
-		batch.Column(0).Append([]time.Time{time.Unix(s.Timestamp/1000, 0).UTC()})
+		err := batch.Column(0).Append([]time.Time{time.Unix(s.Timestamp/1000, 0).UTC()})
+		if err != nil {
+			glog.Errorf("Unable to append timestamp field to sample in %s", dataset)
+		}
 		for colIdx, fieldName := range insertFieldOrder {
 			fieldDescription, ok := fieldSet[fieldName]
 			if !ok {
 				return fmt.Errorf("internally generated field description is missing, is your CPU/memory okay?")
 			}
 			fv, sampleHasField := s.Data[fieldName]
+			var err error = nil
 			switch fieldDescription.Type {
 			case Measure:
 				if sampleHasField {
-					batch.Column(colIdx + 1).Append([]float64{fv.MeasureValue})
+					err = batch.Column(colIdx + 1).Append([]float64{fv.MeasureValue})
 				} else {
-					batch.Column(colIdx + 1).Append([]float64{0})
+					err = batch.Column(colIdx + 1).Append([]float64{0})
+				}
+				if err != nil {
+					glog.Errorf("Unable to append Measure field %s in %s", fieldName, dataset)
 				}
 			case Label:
 				if sampleHasField {
-					batch.Column(colIdx + 1).Append([]string{fv.LabelValue})
+					err = batch.Column(colIdx + 1).Append([]string{fv.LabelValue})
 				} else {
-					batch.Column(colIdx + 1).Append([]string{""})
+					err = batch.Column(colIdx + 1).Append([]string{""})
+				}
+				if err != nil {
+					glog.Errorf("Unable to append Label field %s in %s", fieldName, dataset)
 				}
 			case LabelSet:
 				if sampleHasField {
-					batch.Column(colIdx + 1).Append([][]string{fv.LabelSetValue})
+					err = batch.Column(colIdx + 1).Append([][]string{fv.LabelSetValue})
 				} else {
-					batch.Column(colIdx + 1).Append([][]string{{}})
+					err = batch.Column(colIdx + 1).Append([][]string{{}})
+				}
+				if err != nil {
+					glog.Errorf("Unable to append LabelSet field %s in %s", fieldName, dataset)
 				}
 			}
 		}
@@ -229,8 +242,8 @@ func (chd ClickHouseDriver) insertSamplesToDataset(ctx context.Context, dataset 
 	return nil
 }
 
-func (chd ClickHouseDriver) Close() {
-	chd.connection.Close()
+func (chd ClickHouseDriver) Close() error {
+	return chd.connection.Close()
 }
 
 var _ StoreDriver = ClickHouseDriver{}

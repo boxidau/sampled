@@ -11,5 +11,5 @@ type StoreDriver interface {
 	InsertSamples(ctx context.Context, samples []sample.Sample) error
 
 	// Close down any open connections/handles
-	Close()
+	Close() error
 }

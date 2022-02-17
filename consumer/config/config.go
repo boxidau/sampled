@@ -3,6 +3,7 @@ package config
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
@@ -47,7 +48,7 @@ type SampledConfig struct {
 }
 
 func LoadConfig(filePath string) (*SampledConfig, error) {
-	rawConfig, err := ioutil.ReadFile(filePath)
+	rawConfig, err := ioutil.ReadFile(filepath.Clean(filePath))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to load config file")
 	}
