@@ -69,7 +69,7 @@ func SampleFromRawSample(r *RawSample) (Sample, error) {
 			}
 			sample.Data[k] = Field{Name: k, Type: LabelSet, LabelSetValue: labelSet}
 		default:
-			glog.Warning("Unsupported field type for %s in dataset %s", k, r.Dataset)
+			glog.Warningf("Unsupported field type for %s in dataset %s", k, r.Dataset)
 		}
 	}
 	return sample, nil
