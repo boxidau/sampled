@@ -3,9 +3,12 @@ import setuptools
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+with open("../../VERSION", "r", encoding="utf-8") as fh:
+    version = fh.readline().strip()
+
 setuptools.setup(
     name="libsampled",
-    version="1.0.0",
+    version=version,
     author="Simon Mirco",
     author_email="python@box.id.au",
     description="Collect samples/events for ingest to sampled",
