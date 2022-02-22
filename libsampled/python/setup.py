@@ -1,11 +1,11 @@
-import setuptools
+from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-setuptools.setup(
+setup(
     name="libsampled",
-    version="1.0.0",
+    version="0.1.5",
     author="Simon Mirco",
     author_email="python@box.id.au",
     description="Collect samples/events for ingest to sampled",
@@ -21,5 +21,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     package_dir={"libsampled": "libsampled"},
+    packages=find_packages(exclude=("tests")),
     python_requires=">=3.6",
 )

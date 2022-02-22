@@ -1,8 +1,16 @@
+# build outputs
 build
+libsampled/python/dist
+
+# python related
 __pycache__
 *.pyc
 *.pyi
+*.egg-info
+.mypy_cache
+
+# development environment
 .vscode
 dev/
 config.local.yaml
-*.egg-info
+.venv

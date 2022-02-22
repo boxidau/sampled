@@ -1,4 +1,4 @@
-name: Go Build
+name: Consumer Build and Test
 
 on:
   push:

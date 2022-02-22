@@ -1,4 +1,4 @@
-from typing import Dict, Union, List
+from typing import Dict, TypedDict, Union, List, Optional
 
 import time
 import threading
@@ -14,9 +14,17 @@ SAMPLED_BUFFER_FLUSH_INTERVAL_MS = int(
 )
 
 SAMPLED_DAEMON_HOST = os.getenv("SAMPLED_DAEMON_HOST", "localhost")
-SAMPLED_DAEMON_PORT = os.getenv("SAMPLED_DAEMON_PORT", 7675)
+SAMPLED_DAEMON_PORT = int(os.getenv("SAMPLED_DAEMON_PORT", 7675))
 
 FieldType = Union[str, float, int, List[str]]
+
+SampleType = Dict[str, FieldType]
+
+
+class QueueItem(TypedDict):
+    timestamp: int
+    dataset: str
+    sample: SampleType
 
 
 def _now_milliseconds() -> int:
@@ -24,12 +32,12 @@ def _now_milliseconds() -> int:
 
 
 class SampleBuffer:
-    def __init__(self):
-        self.__q = queue.Queue(maxsize=1000)
+    def __init__(self) -> None:
+        self.__q: queue.Queue[QueueItem] = queue.Queue(maxsize=1000)
         self.__buffer = b""
         self.__buffer_message_count = 0
         self.__last_flush = _now_milliseconds()
-        self.__socket = None
+        self.__socket: Optional[socket.socket] = None
 
         sampled_thread = threading.Thread(
             target=self._flush_loop, name="SampledPublisher", daemon=True
@@ -59,7 +67,6 @@ class SampleBuffer:
                 self._do_flush()
 
     def _do_flush(self) -> None:
-        print(f"flushing {self.__buffer_message_count} samples")
         buffer, self.__buffer = self.__buffer, b""
         self.__buffer_message_count = 0
         self.__last_flush = _now_milliseconds()
@@ -77,7 +84,6 @@ class SampleBuffer:
                 if self.__socket is not None:
                     self.__socket.close()
                     self.__socket = None
-                print(f"Failed to push samples, attempt: {attempt}, error: {e}")
                 time.sleep(1)
                 attempt += 1
 
