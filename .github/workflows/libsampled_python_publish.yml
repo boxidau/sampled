@@ -1,4 +1,4 @@
-name: Libsampled Python Lint
+name: Libsampled Python Publish
 
 on:
   push:
